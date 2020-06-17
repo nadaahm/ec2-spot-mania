@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates a mechanisim to handle Fargate Spot task placement failure
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+            - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+      Path: /
+  LambdaRolePolicy: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "Fargate-Spot-Failure-Handler-Lambda-Role-Policy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Action: [
+                "ecs:ListAttributes",
+                "ecs:DescribeTaskSets",
+                "ecs:DescribeTaskDefinition",
+                "ecs:DescribeClusters",
+                "ecs:ListServices",
+                "ecs:ListAccountSettings",
+                "ecs:UpdateService",
+                "ecs:ListTagsForResource",
+                "ecs:ListTasks",
+                "ecs:ListTaskDefinitionFamilies",
+                "ecs:DescribeServices",
+                "ecs:ListContainerInstances",
+                "ecs:DescribeContainerInstances",
+                "ecs:DescribeTasks",
+                "ecs:ListTaskDefinitions",
+                "ecs:ListClusters"
+            ]
+            Resource: "*"
+      Roles: 
+        - 
+          Ref: "LambdaRole"
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "Fargate-Spot-failure-handler-function"
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      Description: 'Fargate Spot failure handler function'
+      MemorySize: 128
+      Timeout: 3
+      Role:         
+        Fn::GetAtt:
+          - LambdaRole
+          - Arn
+      Code:
+          ZipFile: |
+            import boto3
+            import json
+            import logging
+            import os
+            import time
+
+            logger = logging.getLogger('logger')
+            logger.setLevel(logging.INFO)
+
+            def log_error_message(e):
+                logger.error(e.response['Error']['Code'])
+                logger.error(e.response['Error']['Message'])
+                
+            def lambda_handler(event, context):
+                logger.info('Event received %s ' % event)
+                client = boto3.client('ecs')
+                clusterName = event['resources'][0].split('/')[1]
+                serviceName = event['resources'][0].split('/')[2]
+
+                
+                try:
+                    response = client.update_service(
+                    cluster = clusterName,
+                    service = serviceName,
+                    capacityProviderStrategy=[
+                        {
+                            'capacityProvider': 'FARGATE',
+                            'weight': 1
+                        },
+                    ],
+                    forceNewDeployment=True,
+                    )
+                    logger.debug('update service response %s ' % response)
+                except ClientError as e:
+                        log_error_message(e)
+                return  ("cluster: %s | service: %s | updated" %(clusterName,serviceName))
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Listen to Fargate Spot failure events and trigger lambda function
+      EventPattern:
+        source:
+          - "aws.ecs"
+        detail-type:
+          - "ECS Service Action"
+        detail:
+          eventName:
+            - "SERVICE_TASK_PLACEMENT_FAILURE"
+      State: "ENABLED"
+      Targets:
+      - 
+        Arn: !GetAtt LambdaFunction.Arn
+        Id: TargetLambda
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: LambdaFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt EventRule.Arn
+Outputs:
+ roleID:
+  Value: !Ref LambdaRole 
+ lambdaID:
+  Value: !Ref LambdaFunction 
