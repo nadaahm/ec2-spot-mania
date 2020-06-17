@@ -3,11 +3,23 @@ Customers use AWS Fargate Spot to run interruption tolerant workloads. Fargate S
 
 This solution provides that mechanism to take an action when Fargate Spot fails to launch tasks due to lack of spare capacity. The solution deploys a CloudWatch rule  to listen for task placement failure event and a lambda function to update the ECS service to run 100% on Fargate.
 
+## Deploy stack
+
+```bash
+aws cloudformation create-stack --stack-name fargate-spot-capacity-fail-handler --template-body file://template.yaml --capabilities CAPABILITY_IAM
+```
+
 ## Test
 * Create ECS service with Fargate Spot as the capacity provider
 * Set Fargate 'Platform version' to 1.4.0
 * At the time of creating this solution, Fargate Spot didn't have capacity with Platform version 1.4 which will trigger Task Placement Failure Event.
 * Lambda function should be triggered and switch the service to run 100% on Fargate.
+
+## Delete stack
+
+```bash
+aws cloudformation delete-stack --stack-name fargate-spot-capacity-fail-handler
+```
 
 ## Details
 
@@ -56,16 +68,4 @@ In the following example, the task was attempting to use the FARGATE_SPOT capaci
   "eventName": ["SERVICE_TASK_PLACEMENT_FAILURE"]
  }
 }
-```
-
-## Create stack
-
-```bash
-aws cloudformation create-stack --stack-name fargate-spot-capacity-fail-handler --template-body file://template.yaml --capabilities CAPABILITY_IAM
-```
-
-## Delete stack
-
-```bash
-aws cloudformation delete-stack --stack-name fargate-spot-capacity-fail-handler
 ```
