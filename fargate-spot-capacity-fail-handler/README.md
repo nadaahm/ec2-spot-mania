@@ -1,7 +1,7 @@
-# Fargate Spot insufficient capacity event handling
+# Fargate Spot insufficient capacity event handler
 Customers use AWS Fargate Spot to run interruption tolerant workloads. Fargate Spot uses spare capacity to run tasks, sometimes customers need to have a mechanism to take an action when spare capacity is not available.
 
-This solution provides that mechanism to take an action when Fargate Spot fails to launch tasks due to lack of spare capacity. The solution deploys a CloudWatch rule  to listen for task placement failure event and a lambda function to update the ECS service to run 100% on Fargate.
+This solution provides that mechanism to take an action when Fargate Spot fails to launch tasks due to lack of spare capacity. The solution deploys an EventBridge rule  to listen for task placement failure event and a lambda function to update the ECS service to run 100% on Fargate.
 
 ## Deploy stack
 
